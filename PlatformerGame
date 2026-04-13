@@ -1,8 +1,4 @@
 
-Дмитрий Баранов <dimawowing123@gmail.com>
-3:15 PM (0 minutes ago)
-to me
-
 import React, { useEffect, useRef, useState } from "react";
 
 export default function PlatformerGame() { const canvasRef = useRef(null); const audioCtxRef = useRef(null);
