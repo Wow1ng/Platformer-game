@@ -1,0 +1,278 @@
+
+Дмитрий Баранов <dimawowing123@gmail.com>
+3:15 PM (0 minutes ago)
+to me
+
+import React, { useEffect, useRef, useState } from "react";
+
+export default function PlatformerGame() { const canvasRef = useRef(null); const audioCtxRef = useRef(null);
+
+const [gameState, setGameState] = useState("menu"); // menu, playing, gameover, win const [score, setScore] = useState(0); const [level, setLevel] = useState(1);
+
+const levels = [ { platforms: [ { x: 0, y: 360, width: 800, height: 40 }, { x: 150, y: 300, width: 120, height: 15 }, { x: 320, y: 240, width: 120, height: 15 }, { x: 520, y: 280, width: 120, height: 15 }, ], enemies: [{ x: 400, y: 330, width: 30, height: 30, dx: 1.5 }], coins: [ { x: 180, y: 260, size: 10 }, { x: 350, y: 200, size: 10 }, { x: 550, y: 240, size: 10 }, ], }, { platforms: [ { x: 0, y: 360, width: 800, height: 40 }, { x: 100, y: 300, width: 100, height: 15 }, { x: 250, y: 250, width: 100, height: 15 }, { x: 400, y: 200, width: 100, height: 15 }, { x: 550, y: 250, width: 100, height: 15 }, ], enemies: [ { x: 200, y: 330, width: 30, height: 30, dx: 2 }, { x: 600, y: 220, width: 30, height: 30, dx: 1.5 }, ], coins: [ { x: 120, y: 260, size: 10 }, { x: 270, y: 210, size: 10 }, { x: 420, y: 160, size: 10 }, { x: 570, y: 210, size: 10 }, ], }, { platforms: [ { x: 0, y: 360, width: 800, height: 40 }, { x: 150, y: 300, width: 100, height: 15 }, { x: 300, y: 240, width: 100, height: 15 }, { x: 450, y: 180, width: 100, height: 15 }, { x: 600, y: 120, width: 100, height: 15 }, ], enemies: [ { x: 250, y: 330, width: 30, height: 30, dx: 2 }, { x: 500, y: 150, width: 30, height: 30, dx: 2 }, ], coins: [ { x: 170, y: 260, size: 10 }, { x: 320, y: 200, size: 10 }, { x: 470, y: 140, size: 10 }, { x: 620, y: 80, size: 10 }, ], }, ];
+
+useEffect(() => { if (gameState !== "playing") return;
+
+const canvas = canvasRef.current;
+const ctx = canvas.getContext("2d");
+canvas.width = 800;
+canvas.height = 400;
+
+const gravity = 0.6;
+const currentLevel = JSON.parse(JSON.stringify(levels[level - 1]));
+
+const player = {
+  x: 50,
+  y: 0,
+  width: 32,
+  height: 32,
+  dx: 0,
+  dy: 0,
+  speed: 4,
+  jumpPower: -12,
+  grounded: false,
+  frame: 0,
+};
+
+const platforms = currentLevel.platforms;
+const enemies = currentLevel.enemies;
+const coins = currentLevel.coins.map((c) => ({ ...c, collected: false }));
+
+const keys = { left: false, right: false, up: false };
+
+// Initialize Audio Context
+if (!audioCtxRef.current) {
+  audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+}
+const audioCtx = audioCtxRef.current;
+
+const playSound = (frequency, duration) => {
+  const oscillator = audioCtx.createOscillator();
+  const gainNode = audioCtx.createGain();
+  oscillator.connect(gainNode);
+  gainNode.connect(audioCtx.destination);
+  oscillator.frequency.value = frequency;
+  oscillator.type = "square";
+  gainNode.gain.value = 0.1;
+  oscillator.start();
+  oscillator.stop(audioCtx.currentTime + duration);
+};
+
+function drawPlayer() {
+  const x = player.x;
+  const y = player.y;
+  const bob = Math.sin(player.frame * 0.2) * 2;
+
+  ctx.fillStyle = "#2563eb";
+  ctx.fillRect(x + 8, y + 8 + bob, 16, 16);
+
+  ctx.fillStyle = "#facc15";
+  ctx.fillRect(x + 10, y + bob, 12, 10);
+
+  ctx.fillStyle = "#000";
+  ctx.fillRect(x + 12, y + 2 + bob, 2, 2);
+  ctx.fillRect(x + 18, y + 2 + bob, 2, 2);
+
+  ctx.fillStyle = "#1e3a8a";
+  ctx.fillRect(x + 8, y + 24 + bob, 6, 8);
+  ctx.fillRect(x + 18, y + 24 + bob, 6, 8);
+}
+
+function drawPlatforms() {
+  ctx.fillStyle = "#16a34a";
+  platforms.forEach((p) =>
+    ctx.fillRect(p.x, p.y, p.width, p.height)
+  );
+}
+
+function drawEnemies() {
+  ctx.fillStyle = "#dc2626";
+  enemies.forEach((e) => ctx.fillRect(e.x, e.y, e.width, e.height));
+}
+
+function drawCoins() {
+  coins.forEach((coin) => {
+    if (!coin.collected) {
+      ctx.fillStyle = "gold";
+      ctx.beginPath();
+      ctx.arc(coin.x, coin.y, coin.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+}
+
+function update() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  player.frame++;
+
+  if (keys.right) player.dx = player.speed;
+  else if (keys.left) player.dx = -player.speed;
+  else player.dx = 0;
+
+  player.dy += gravity;
+  player.x += player.dx;
+  player.y += player.dy;
+  player.grounded = false;
+
+  platforms.forEach((platform) => {
+    if (
+      player.x < platform.x + platform.width &&
+      player.x + player.width > platform.x &&
+      player.y < platform.y + platform.height &&
+      player.y + player.height > platform.y
+    ) {
+      if (
+        player.dy >= 0 &&
+        player.y + player.height - player.dy <= platform.y
+      ) {
+        player.y = platform.y - player.height;
+        player.dy = 0;
+        player.grounded = true;
+      }
+    }
+  });
+
+  if (keys.up && player.grounded) {
+    player.dy = player.jumpPower;
+    playSound(600, 0.1);
+  }
+
+  enemies.forEach((enemy) => {
+    enemy.x += enemy.dx;
+    if (enemy.x <= 0 || enemy.x + enemy.width >= canvas.width) {
+      enemy.dx *= -1;
+    }
+
+    if (
+      player.x < enemy.x + enemy.width &&
+      player.x + player.width > enemy.x &&
+      player.y < enemy.y + enemy.height &&
+      player.y + player.height > enemy.y
+    ) {
+      playSound(150, 0.3);
+      setGameState("gameover");
+    }
+  });
+
+  coins.forEach((coin) => {
+    if (!coin.collected) {
+      const dx = player.x + player.width / 2 - coin.x;
+      const dy = player.y + player.height / 2 - coin.y;
+      if (Math.sqrt(dx * dx + dy * dy) < coin.size + 10) {
+        coin.collected = true;
+        setScore((prev) => prev + 10);
+        playSound(900, 0.1);
+      }
+    }
+  });
+
+  if (coins.every((c) => c.collected)) {
+    // Automatically proceed to the next level
+    if (level < levels.length) {
+      setTimeout(() => {
+        setLevel((prev) => prev + 1);
+        setGameState("playing");
+      }, 1000); // 1-second delay before next level
+      return;
+    } else {
+      setTimeout(() => {
+        setGameState("win");
+      }, 1000);
+      return;
+    }
+  } else {
+      setGameState("win");
+    }
+  }
+
+  drawPlatforms();
+  drawCoins();
+  drawEnemies();
+  drawPlayer();
+
+  if (gameState === "playing") {
+    requestAnimationFrame(update);
+  }
+}
+
+const keyDown = (e) => {
+  if (e.code === "ArrowRight" || e.code === "KeyD") keys.right = true;
+  if (e.code === "ArrowLeft" || e.code === "KeyA") keys.left = true;
+  if (e.code === "ArrowUp" || e.code === "Space" || e.code === "KeyW")
+    keys.up = true;
+};
+
+const keyUp = (e) => {
+  if (e.code === "ArrowRight" || e.code === "KeyD") keys.right = false;
+  if (e.code === "ArrowLeft" || e.code === "KeyA") keys.left = false;
+  if (e.code === "ArrowUp" || e.code === "Space" || e.code === "KeyW")
+    keys.up = false;
+};
+
+window.addEventListener("keydown", keyDown);
+window.addEventListener("keyup", keyUp);
+
+update();
+
+return () => {
+  window.removeEventListener("keydown", keyDown);
+  window.removeEventListener("keyup", keyUp);
+};
+
+}, [gameState, level]);
+
+const startGame = () => { setScore(0); setLevel(1); setGameState("playing"); };
+
+const nextLevel = () => { setGameState("playing"); };
+
+return ( <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white"> <h1 className="text-4xl font-bold mb-2">🎮 Pixel Adventure</h1> <p className="mb-2">Level: {level} | Score: {score}</p>
+
+{gameState === "menu" && (
+    <div className="text-center">
+      <button
+        onClick={level === 1 ? startGame : nextLevel}
+        className="px-6 py-3 bg-blue-600 rounded-2xl shadow-lg hover:bg-blue-700 transition"
+      >
+        {level === 1 ? "Start Game" : "Start Level " + level}
+      </button>
+    </div>
+  )}
+
+  {gameState === "gameover" && (
+    <div className="text-center mb-4">
+      <p className="text-2xl text-red-400 font-bold">Game Over</p>
+      <button
+        onClick={() => setGameState("menu")}
+        className="mt-2 px-6 py-2 bg-red-600 rounded-xl hover:bg-red-700"
+      >
+        Back to Menu
+      </button>
+    </div>
+  )}
+
+  {gameState === "win" && (
+    <div className="text-center mb-4">
+      <p className="text-2xl text-green-400 font-bold">You Win! 🏆</p>
+      <button
+        onClick={() => setGameState("menu")}
+        className="mt-2 px-6 py-2 bg-green-600 rounded-xl hover:bg-green-700"
+      >
+        Play Again
+      </button>
+    </div>
+  )}
+
+  <canvas
+    ref={canvasRef}
+    className="border-4 border-white rounded-2xl shadow-2xl bg-sky-200"
+  />
+
+  <div className="mt-4 text-center text-sm opacity-80">
+    <p>Controls:</p>
+    <p>⬅️ ➡️ or A/D — Move</p>
+    <p>⬆️, W or Space — Jump</p>
+    <p>🪙 Collect all coins to advance!</p>
+  </div>
+</div>
+
+); }
